@@ -9,6 +9,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import type { MedicationWithDetails } from "@shared/schema";
 
 export default function MedicationDetail() {
   const [, params] = useRoute("/medication/:id");
@@ -17,17 +18,17 @@ export default function MedicationDetail() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: medication, isLoading } = useQuery({
+  const { data: medication, isLoading } = useQuery<MedicationWithDetails>({
     queryKey: ["/api/medications", params?.id],
     enabled: !!params?.id,
   });
 
-  const { data: favorites = [] } = useQuery({
+  const { data: favorites = [] } = useQuery<MedicationWithDetails[]>({
     queryKey: ["/api/favorites"],
     enabled: isAuthenticated,
   });
 
-  const isFavorite = favorites.some((fav: any) => fav.id === params?.id);
+  const isFavorite = favorites.some((fav) => fav.id === params?.id);
 
   const favoriteMutation = useMutation({
     mutationFn: async () => {
@@ -67,7 +68,7 @@ export default function MedicationDetail() {
   });
 
   const handleGoBack = () => {
-    setLocation(-1);
+    setLocation("/");
   };
 
   const handleFindPharmacies = () => {

@@ -2,16 +2,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
+import type { MedicationWithDetails } from "@shared/schema";
+
 interface MedicationCardProps {
-  medication: {
-    id: string;
-    brandName: string;
-    genericName?: string;
-    description: string;
-    category: string;
-    imageUrl?: string;
-    price?: string;
-  };
+  medication: MedicationWithDetails;
   onCompare: () => void;
   onViewDetails: () => void;
   showFavoriteButton?: boolean;

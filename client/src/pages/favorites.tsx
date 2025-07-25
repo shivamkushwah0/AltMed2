@@ -7,12 +7,13 @@ import MedicationCard from "@/components/medication-card";
 import BottomNavigation from "@/components/bottom-navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocation } from "wouter";
+import type { MedicationWithDetails } from "@shared/schema";
 
 export default function Favorites() {
   const [, setLocation] = useLocation();
   const { isAuthenticated } = useAuth();
 
-  const { data: favorites = [], isLoading } = useQuery({
+  const { data: favorites = [], isLoading } = useQuery<MedicationWithDetails[]>({
     queryKey: ["/api/favorites"],
     enabled: isAuthenticated,
   });
@@ -80,7 +81,7 @@ export default function Favorites() {
           </div>
         ) : favorites.length > 0 ? (
           <div className="space-y-4">
-            {favorites.map((medication: any) => (
+            {favorites.map((medication) => (
               <MedicationCard
                 key={medication.id}
                 medication={medication}

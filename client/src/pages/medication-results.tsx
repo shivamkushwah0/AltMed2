@@ -11,9 +11,11 @@ import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
+import type { Symptom, MedicationWithDetails } from "@shared/schema";
+
 interface SearchResults {
-  symptoms: any[];
-  medications: any[];
+  symptoms: Symptom[];
+  medications: MedicationWithDetails[];
   aiAnalysis: {
     symptomAnalysis: string;
     warnings: string[];
@@ -28,11 +30,11 @@ export default function MedicationResults() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const searchMutation = useMutation({
+  const searchMutation = useMutation<SearchResults, Error, string[]>({
     mutationFn: async (symptoms: string[]) => {
       const response = await apiRequest("POST", "/api/search/symptoms", {
         symptoms,
-        userId: user?.id,
+        userId: user?.id || null,
       });
       return response.json();
     },

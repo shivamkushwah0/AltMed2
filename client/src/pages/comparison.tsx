@@ -65,7 +65,7 @@ export default function Comparison() {
   }, []);
 
   const handleGoBack = () => {
-    setLocation(-1);
+    setLocation("/");
   };
 
   if (compareMutation.isPending) {

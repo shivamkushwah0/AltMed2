@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import PharmacyCard from "@/components/pharmacy-card";
 import { useToast } from "@/hooks/use-toast";
+import type { PharmacyWithStock } from "@shared/schema";
 
 export default function PharmacyFinder() {
   const [, setLocation] = useLocation();
@@ -37,13 +38,13 @@ export default function PharmacyFinder() {
     }
   }, []);
 
-  const { data: pharmacies = [], isLoading } = useQuery({
+  const { data: pharmacies = [], isLoading } = useQuery<PharmacyWithStock[]>({
     queryKey: ["/api/pharmacies/nearby", userLocation?.lat, userLocation?.lng],
     enabled: !!userLocation,
   });
 
   const handleGoBack = () => {
-    setLocation(-1);
+    setLocation("/");
   };
 
   // Show location error toast

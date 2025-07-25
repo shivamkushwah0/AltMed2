@@ -8,17 +8,18 @@ import { Search, Plus } from "lucide-react";
 import BottomNavigation from "@/components/bottom-navigation";
 import SymptomButton from "@/components/symptom-button";
 import { useAuth } from "@/hooks/useAuth";
+import type { Symptom, SearchHistory } from "@shared/schema";
 
 export default function Home() {
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const { user } = useAuth();
 
-  const { data: commonSymptoms = [] } = useQuery({
+  const { data: commonSymptoms = [] } = useQuery<Symptom[]>({
     queryKey: ["/api/symptoms/common"],
   });
 
-  const { data: searchHistory = [] } = useQuery({
+  const { data: searchHistory = [] } = useQuery<SearchHistory[]>({
     queryKey: ["/api/search/history"],
     enabled: !!user,
   });
@@ -80,7 +81,7 @@ export default function Home() {
         
         {/* Common Symptoms Grid */}
         <div className="grid grid-cols-2 gap-4 mb-8">
-          {commonSymptoms.map((symptom: any) => (
+          {commonSymptoms.map((symptom) => (
             <SymptomButton
               key={symptom.id}
               symptom={symptom}
@@ -96,7 +97,7 @@ export default function Home() {
               Recent searches
             </h3>
             <div className="space-y-3">
-              {searchHistory.slice(0, 3).map((search: any) => (
+              {searchHistory.slice(0, 3).map((search) => (
                 <Card 
                   key={search.id} 
                   className="cursor-pointer hover:bg-gray-50 transition-colors"
@@ -106,7 +107,7 @@ export default function Home() {
                   <CardContent className="p-3">
                     <span className="text-gray-800 font-medium">{search.searchQuery}</span>
                     <span className="text-gray-500 text-sm block">
-                      {new Date(search.createdAt).toLocaleDateString()}
+                      {search.createdAt ? new Date(search.createdAt).toLocaleDateString() : ''}
                     </span>
                   </CardContent>
                 </Card>

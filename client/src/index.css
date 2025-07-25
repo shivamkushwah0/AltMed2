@@ -61,11 +61,17 @@
 
 /* Custom utility classes for the medical app */
 .medication-card-hover {
-  @apply hover:border-primary hover:bg-primary/5 transition-all duration-200;
+  @apply hover:border-primary transition-all duration-200;
+  &:hover {
+    background-color: hsl(215, 84%, 54%, 0.05);
+  }
 }
 
 .symptom-button-hover {
-  @apply hover:border-primary hover:bg-primary/5 transition-all duration-200;
+  @apply hover:border-primary transition-all duration-200;
+  &:hover {
+    background-color: hsl(215, 84%, 54%, 0.05);
+  }
 }
 
 .pharmacy-card-shadow {

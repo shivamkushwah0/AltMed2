@@ -1,11 +1,9 @@
 import { Button } from "@/components/ui/button";
 
+import type { Symptom } from "@shared/schema";
+
 interface SymptomButtonProps {
-  symptom: {
-    id: string;
-    name: string;
-    iconName?: string;
-  };
+  symptom: Symptom;
   onClick: () => void;
 }
 

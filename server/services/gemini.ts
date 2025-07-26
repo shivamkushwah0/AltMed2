@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import type { Symptom, MedicationWithDetails } from "@shared/schema";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-
+console.log(process.env.GEMINI_API_KEY);
 interface MedicationRecommendation {
   symptomAnalysis: string;
   recommendedMedications: {
@@ -18,9 +18,10 @@ interface MedicationRecommendation {
 export async function analyzeSymptomsAndRecommendMedications(
   symptoms: string[],
   availableSymptoms: Symptom[],
-  availableMedications: MedicationWithDetails[]
+  availableMedications: MedicationWithDetails[],
 ): Promise<MedicationRecommendation> {
   try {
+    console.log(process.env.GEMINI_API_KEY);
     const systemPrompt = `You are a medical AI assistant that helps recommend over-the-counter medications based on symptoms.
     
 Guidelines:
@@ -32,11 +33,14 @@ Guidelines:
 - Consider drug interactions and contraindications
 - Recommend seeing a healthcare provider for serious symptoms
 
-Available symptoms: ${availableSymptoms.map(s => `${s.name}: ${s.description || 'No description'}`).join(', ')}
+Available symptoms: ${availableSymptoms.map((s) => `${s.name}: ${s.description || "No description"}`).join(", ")}
 
-Available medications: ${availableMedications.map(med => 
-  `${med.brandName} (${med.genericName}): ${med.description} - Uses: ${med.uses} - Category: ${med.category}`
-).join('\n')}
+Available medications: ${availableMedications
+      .map(
+        (med) =>
+          `${med.brandName} (${med.genericName}): ${med.description} - Uses: ${med.uses} - Category: ${med.category}`,
+      )
+      .join("\n")}
 
 Respond with JSON in this exact format:
 {
@@ -53,7 +57,7 @@ Respond with JSON in this exact format:
   "additionalAdvice": "General advice and when to see a doctor"
 }`;
 
-    const userPrompt = `Analyze these symptoms and recommend appropriate medications: ${symptoms.join(', ')}`;
+    const userPrompt = `Analyze these symptoms and recommend appropriate medications: ${symptoms.join(", ")}`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-pro",
@@ -72,18 +76,28 @@ Respond with JSON in this exact format:
                   medicationId: { type: "string" },
                   reasoning: { type: "string" },
                   effectiveness: { type: "number" },
-                  priority: { type: "number" }
+                  priority: { type: "number" },
                 },
-                required: ["medicationId", "reasoning", "effectiveness", "priority"]
-              }
+                required: [
+                  "medicationId",
+                  "reasoning",
+                  "effectiveness",
+                  "priority",
+                ],
+              },
             },
             warnings: {
               type: "array",
-              items: { type: "string" }
+              items: { type: "string" },
             },
-            additionalAdvice: { type: "string" }
+            additionalAdvice: { type: "string" },
           },
-          required: ["symptomAnalysis", "recommendedMedications", "warnings", "additionalAdvice"]
+          required: [
+            "symptomAnalysis",
+            "recommendedMedications",
+            "warnings",
+            "additionalAdvice",
+          ],
         },
       },
       contents: userPrompt,
@@ -92,12 +106,12 @@ Respond with JSON in this exact format:
     const rawJson = response.text;
     if (rawJson) {
       const data: MedicationRecommendation = JSON.parse(rawJson);
-      
+
       // Validate that recommended medications exist in our database
-      data.recommendedMedications = data.recommendedMedications.filter(rec => 
-        availableMedications.some(med => med.id === rec.medicationId)
+      data.recommendedMedications = data.recommendedMedications.filter((rec) =>
+        availableMedications.some((med) => med.id === rec.medicationId),
       );
-      
+
       return data;
     } else {
       throw new Error("Empty response from Gemini API");
@@ -110,7 +124,7 @@ Respond with JSON in this exact format:
 
 export async function generateMedicationComparison(
   medication1: MedicationWithDetails,
-  medication2: MedicationWithDetails
+  medication2: MedicationWithDetails,
 ): Promise<{
   comparison: {
     category: string;
@@ -150,7 +164,7 @@ Uses: ${medication1.uses}
 Category: ${medication1.category}
 Dosage: ${medication1.dosage}
 Side Effects: ${medication1.sideEffects}
-Price: ${medication1.price || 'Not specified'}
+Price: ${medication1.price || "Not specified"}
 
 Medication 2: ${medication2.brandName} (${medication2.genericName})
 Description: ${medication2.description}
@@ -158,7 +172,7 @@ Uses: ${medication2.uses}
 Category: ${medication2.category}
 Dosage: ${medication2.dosage}
 Side Effects: ${medication2.sideEffects}
-Price: ${medication2.price || 'Not specified'}`;
+Price: ${medication2.price || "Not specified"}`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-pro",
@@ -175,14 +189,14 @@ Price: ${medication2.price || 'Not specified'}`;
                 properties: {
                   category: { type: "string" },
                   medication1Value: { type: "string" },
-                  medication2Value: { type: "string" }
+                  medication2Value: { type: "string" },
                 },
-                required: ["category", "medication1Value", "medication2Value"]
-              }
+                required: ["category", "medication1Value", "medication2Value"],
+              },
             },
-            summary: { type: "string" }
+            summary: { type: "string" },
           },
-          required: ["comparison", "summary"]
+          required: ["comparison", "summary"],
         },
       },
       contents: userPrompt,

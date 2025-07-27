@@ -7,20 +7,22 @@ import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
+import dotnet from 'dotenv';
+dotnet.config();
 
-if (!process.env.REPLIT_DOMAINS) {
-  throw new Error("Environment variable REPLIT_DOMAINS not provided");
-}
+// if (!process.env.REPLIT_DOMAINS) {
+//   throw new Error("Environment variable REPLIT_DOMAINS not provided");
+// }
 
-const getOidcConfig = memoize(
-  async () => {
-    return await client.discovery(
-      new URL(process.env.ISSUER_URL ?? "https://replit.com/oidc"),
-      process.env.REPL_ID!
-    );
-  },
-  { maxAge: 3600 * 1000 }
-);
+// const getOidcConfig = memoize(
+//   async () => {
+//     return await client.discovery(
+//       new URL(process.env.ISSUER_URL ?? "https://replit.com/oidc"),
+//       process.env.REPL_ID!
+//     );
+//   },
+//   { maxAge: 3600 * 1000 }
+// );
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
@@ -84,19 +86,19 @@ export async function setupAuth(app: Express) {
     verified(null, user);
   };
 
-  for (const domain of process.env
-    .REPLIT_DOMAINS!.split(",")) {
-    const strategy = new Strategy(
-      {
-        name: `replitauth:${domain}`,
-        config,
-        scope: "openid email profile offline_access",
-        callbackURL: `https://${domain}/api/callback`,
-      },
-      verify,
-    );
-    passport.use(strategy);
-  }
+  // for (const domain of process.env
+  //   .REPLIT_DOMAINS!.split(",")) {
+  //   const strategy = new Strategy(
+  //     {
+  //       name: `replitauth:${domain}`,
+  //       config,
+  //       scope: "openid email profile offline_access",
+  //       callbackURL: `https://${domain}/api/callback`,
+  //     },
+  //     verify,
+  //   );
+  //   passport.use(strategy);
+  // }
 
   passport.serializeUser((user: Express.User, cb) => cb(null, user));
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));

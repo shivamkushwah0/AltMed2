@@ -27,6 +27,22 @@ const getOidcConfig = memoize(
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
+  
+  // For local development without database, use memory store
+  if (process.env.NODE_ENV === 'development' && !process.env.DATABASE_URL) {
+    return session({
+      secret: process.env.SESSION_SECRET || 'local-dev-secret-key',
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        httpOnly: true,
+        secure: false, // Set to false for localhost
+        maxAge: sessionTtl,
+      },
+    });
+  }
+  
+  // For production or when database is available
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
     conString: process.env.DATABASE_URL,
@@ -41,7 +57,7 @@ export function getSession() {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === 'production',
       maxAge: sessionTtl,
     },
   });

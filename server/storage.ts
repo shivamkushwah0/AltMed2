@@ -24,6 +24,70 @@ import {
   type PharmacyWithStock,
 } from "@shared/schema";
 import { db } from "./db";
+
+// For local development without database, we'll use memory storage
+const isDevelopment = process.env.NODE_ENV === 'development' && !process.env.DATABASE_URL;
+let memoryStore: { [key: string]: any[] } = {};
+
+if (isDevelopment) {
+  // Initialize with sample data for local development
+  memoryStore = {
+    users: [
+      {
+        id: "dev-user-123",
+        email: "dev@example.com",
+        firstName: "Dev",
+        lastName: "User",
+        profileImageUrl: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    ],
+    symptoms: [
+      { id: "symptom-1", name: "Headache", description: "Pain in the head or upper neck", severity: "moderate" },
+      { id: "symptom-2", name: "Fever", description: "Elevated body temperature", severity: "moderate" },
+      { id: "symptom-3", name: "Cough", description: "Sudden expulsion of air from lungs", severity: "mild" },
+      { id: "symptom-4", name: "Nausea", description: "Feeling of sickness with inclination to vomit", severity: "mild" },
+      { id: "symptom-5", name: "Fatigue", description: "Extreme tiredness or lack of energy", severity: "mild" },
+      { id: "symptom-6", name: "Chest Pain", description: "Pain or discomfort in the chest area", severity: "severe" }
+    ],
+    medications: [
+      {
+        id: "med-1",
+        brandName: "Tylenol",
+        genericName: "Acetaminophen",
+        description: "Pain reliever and fever reducer",
+        dosage: "500mg tablets",
+        sideEffects: ["Nausea", "Stomach upset"],
+        warnings: ["Do not exceed 4000mg per day"],
+        price: 8.99,
+        category: "Pain Relief"
+      },
+      {
+        id: "med-2",
+        brandName: "Advil",
+        genericName: "Ibuprofen",
+        description: "Non-steroidal anti-inflammatory drug (NSAID)",
+        dosage: "200mg tablets",
+        sideEffects: ["Stomach irritation", "Dizziness"],
+        warnings: ["Take with food", "May increase bleeding risk"],
+        price: 7.49,
+        category: "Pain Relief"
+      }
+    ],
+    pharmacies: [
+      {
+        id: "pharmacy-1",
+        name: "Local Pharmacy",
+        address: "123 Main St, City, State 12345",
+        latitude: 40.7128,
+        longitude: -74.0060,
+        phone: "(555) 123-4567",
+        hours: "Mon-Fri: 9AM-9PM, Sat-Sun: 10AM-6PM"
+      }
+    ]
+  };
+}
 import { eq, and, ilike, sql, desc, inArray } from "drizzle-orm";
 
 export interface IStorage {
@@ -318,4 +382,109 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage();
+// Create a memory storage class for local development
+class MemoryStorage implements IStorage {
+  // User operations (required for Replit Auth)
+  async getUser(id: string): Promise<User | undefined> {
+    return memoryStore.users?.find((u: any) => u.id === id);
+  }
+
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    if (!memoryStore.users) memoryStore.users = [];
+    const existing = memoryStore.users.findIndex((u: any) => u.id === userData.id);
+    const user = { ...userData, createdAt: new Date(), updatedAt: new Date() };
+    
+    if (existing >= 0) {
+      memoryStore.users[existing] = user;
+    } else {
+      memoryStore.users.push(user);
+    }
+    return user as User;
+  }
+
+  // Medication operations
+  async getMedications(): Promise<Medication[]> {
+    return memoryStore.medications || [];
+  }
+
+  async getMedicationById(id: string): Promise<MedicationWithDetails | undefined> {
+    const medication = memoryStore.medications?.find((m: any) => m.id === id);
+    if (!medication) return undefined;
+    return { ...medication, symptoms: [] };
+  }
+
+  async getMedicationsBySymptom(symptomIds: string[]): Promise<MedicationWithDetails[]> {
+    return (memoryStore.medications || []).map((m: any) => ({ ...m, symptoms: [] }));
+  }
+
+  async createMedication(medication: InsertMedication): Promise<Medication> {
+    const newMed = { ...medication, id: `med-${Date.now()}`, isActive: true, createdAt: new Date(), updatedAt: new Date() };
+    if (!memoryStore.medications) memoryStore.medications = [];
+    memoryStore.medications.push(newMed);
+    return newMed as Medication;
+  }
+
+  // Symptom operations
+  async getSymptoms(): Promise<Symptom[]> {
+    return memoryStore.symptoms || [];
+  }
+
+  async getCommonSymptoms(): Promise<Symptom[]> {
+    return memoryStore.symptoms || [];
+  }
+
+  async getSymptomByName(name: string): Promise<Symptom | undefined> {
+    return memoryStore.symptoms?.find((s: any) => s.name.toLowerCase() === name.toLowerCase());
+  }
+
+  async createSymptom(symptom: InsertSymptom): Promise<Symptom> {
+    const newSymptom = { ...symptom, id: `symptom-${Date.now()}` };
+    if (!memoryStore.symptoms) memoryStore.symptoms = [];
+    memoryStore.symptoms.push(newSymptom);
+    return newSymptom as Symptom;
+  }
+
+  // Pharmacy operations
+  async getPharmacies(): Promise<Pharmacy[]> {
+    return memoryStore.pharmacies || [];
+  }
+
+  async getNearbyPharmacies(lat: number, lng: number, radius: number): Promise<PharmacyWithStock[]> {
+    return (memoryStore.pharmacies || []).map((p: any) => ({ ...p, medications: [] }));
+  }
+
+  async getPharmacyStock(pharmacyId: string, medicationId: string): Promise<PharmacyStock | undefined> {
+    return { 
+      id: `stock-${pharmacyId}-${medicationId}`,
+      pharmacyId, 
+      medicationId, 
+      stockLevel: "in-stock",
+      lastUpdated: new Date() 
+    } as PharmacyStock;
+  }
+
+  // User favorites
+  async getUserFavorites(userId: string): Promise<MedicationWithDetails[]> {
+    return [];
+  }
+
+  async addFavorite(favorite: InsertUserFavorite): Promise<UserFavorite> {
+    return { ...favorite, id: `fav-${Date.now()}`, createdAt: new Date() } as UserFavorite;
+  }
+
+  async removeFavorite(userId: string, medicationId: string): Promise<void> {
+    // No-op for memory storage
+  }
+
+  // Search history
+  async getUserSearchHistory(userId: string): Promise<SearchHistory[]> {
+    return [];
+  }
+
+  async addSearchHistory(search: InsertSearchHistory): Promise<SearchHistory> {
+    return { ...search, id: `search-${Date.now()}`, createdAt: new Date() } as SearchHistory;
+  }
+}
+
+// Use memory storage for development without database, otherwise use database storage
+export const storage = isDevelopment ? new MemoryStorage() : new DatabaseStorage();

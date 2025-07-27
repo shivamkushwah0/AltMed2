@@ -4,6 +4,13 @@
 
 AltMed is a modern web application designed to help users find alternative medications based on their symptoms. The app provides AI-powered medication recommendations, pharmacy location services, and detailed medication information to assist users in making informed healthcare decisions.
 
+**Recent Changes (January 27, 2025):**
+- Implemented complete local development setup without Replit dependencies
+- Added memory storage fallback for database-free local development
+- Created `run-local.js` script for port 3000 local development
+- Fixed authentication system to work with localhost development
+- Added comprehensive setup documentation and scripts
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
@@ -100,10 +107,12 @@ The application uses a PostgreSQL database with the following main entities:
 
 ### Development Environment
 - **Hot Reloading**: Vite dev server with HMR support
-- **Database**: Development database with auto-migration
+- **Database**: Development database with auto-migration OR memory storage for database-free development
 - **Environment**: NODE_ENV=development
-- **Local Setup**: Configured for localhost development with setup scripts
-- **Port Configuration**: Default port 5000, alternative port 3000 available
+- **Local Setup**: Complete localhost setup with automated scripts (setup-local.sh)
+- **Port Configuration**: Default port 5000, alternative port 3000 via run-local.js
+- **Authentication**: Development mode with mock user sessions for localhost testing
+- **Storage**: Dual-mode storage system (PostgreSQL for production, memory storage for local development)
 
 ### Production Build
 - **Frontend**: Vite builds optimized React bundle to `dist/public`

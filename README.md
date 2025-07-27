@@ -59,11 +59,19 @@ npm run db:push
 
 ### 4. Start Development Server
 
+**Option 1: Default (port 5000)**
 ```bash
 npm run dev
 ```
 
-The application will be available at `http://localhost:5000`
+**Option 2: Local development (port 3000)**
+```bash
+node run-local.js
+```
+
+The application will be available at:
+- `http://localhost:5000` (default)
+- `http://localhost:3000` (local development)
 
 ## API Endpoints
 
@@ -85,7 +93,8 @@ The application will be available at `http://localhost:5000`
 
 ## Scripts
 
-- `npm run dev` - Start development server
+- `npm run dev` - Start development server (port 5000)
+- `node run-local.js` - Start local development server (port 3000)
 - `npm run build` - Build for production
 - `npm run start` - Start production server
 - `npm run db:push` - Update database schema

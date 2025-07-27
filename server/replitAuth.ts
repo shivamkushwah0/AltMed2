@@ -10,19 +10,20 @@ import { storage } from "./storage";
 import dotnet from 'dotenv';
 dotnet.config();
 
-// if (!process.env.REPLIT_DOMAINS) {
-//   throw new Error("Environment variable REPLIT_DOMAINS not provided");
-// }
-
-// const getOidcConfig = memoize(
-//   async () => {
-//     return await client.discovery(
-//       new URL(process.env.ISSUER_URL ?? "https://replit.com/oidc"),
-//       process.env.REPL_ID!
-//     );
-//   },
-//   { maxAge: 3600 * 1000 }
-// );
+const getOidcConfig = memoize(
+  async () => {
+    // Only configure OIDC in production with proper Replit environment
+    if (process.env.NODE_ENV === "production" && process.env.REPL_ID) {
+      return await client.discovery(
+        new URL(process.env.ISSUER_URL ?? "https://replit.com/oidc"),
+        process.env.REPL_ID!
+      );
+    }
+    // Return null for development - auth functions will handle this
+    return null;
+  },
+  { maxAge: 3600 * 1000 }
+);
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
@@ -86,50 +87,95 @@ export async function setupAuth(app: Express) {
     verified(null, user);
   };
 
-  // for (const domain of process.env
-  //   .REPLIT_DOMAINS!.split(",")) {
-  //   const strategy = new Strategy(
-  //     {
-  //       name: `replitauth:${domain}`,
-  //       config,
-  //       scope: "openid email profile offline_access",
-  //       callbackURL: `https://${domain}/api/callback`,
-  //     },
-  //     verify,
-  //   );
-  //   passport.use(strategy);
-  // }
+  // Setup passport strategy only if in production with proper Replit environment
+  if (process.env.NODE_ENV === "production" && process.env.REPLIT_DOMAINS && config) {
+    for (const domain of process.env.REPLIT_DOMAINS.split(",")) {
+      const strategy = new Strategy(
+        {
+          name: `replitauth:${domain}`,
+          config,
+          scope: "openid email profile offline_access",
+          callbackURL: `https://${domain}/api/callback`,
+        },
+        verify,
+      );
+      passport.use(strategy);
+    }
+  }
 
   passport.serializeUser((user: Express.User, cb) => cb(null, user));
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
   app.get("/api/login", (req, res, next) => {
-    passport.authenticate(`replitauth:${req.hostname}`, {
-      prompt: "login consent",
-      scope: ["openid", "email", "profile", "offline_access"],
-    })(req, res, next);
+    if (process.env.NODE_ENV === "development") {
+      // For development, create a mock user session
+      req.login({ 
+        claims: { 
+          sub: "dev-user-123", 
+          email: "dev@example.com", 
+          first_name: "Dev", 
+          last_name: "User" 
+        },
+        access_token: "dev-token",
+        expires_at: Math.floor(Date.now() / 1000) + 3600
+      }, (err) => {
+        if (err) return next(err);
+        res.redirect("/");
+      });
+    } else {
+      passport.authenticate(`replitauth:${req.hostname}`, {
+        prompt: "login consent",
+        scope: ["openid", "email", "profile", "offline_access"],
+      })(req, res, next);
+    }
   });
 
   app.get("/api/callback", (req, res, next) => {
-    passport.authenticate(`replitauth:${req.hostname}`, {
-      successReturnToOrRedirect: "/",
-      failureRedirect: "/api/login",
-    })(req, res, next);
+    if (process.env.NODE_ENV === "development") {
+      res.redirect("/");
+    } else {
+      passport.authenticate(`replitauth:${req.hostname}`, {
+        successReturnToOrRedirect: "/",
+        failureRedirect: "/api/login",
+      })(req, res, next);
+    }
   });
 
   app.get("/api/logout", (req, res) => {
     req.logout(() => {
-      res.redirect(
-        client.buildEndSessionUrl(config, {
-          client_id: process.env.REPL_ID!,
-          post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
-        }).href
-      );
+      if (process.env.NODE_ENV === "development" || !config) {
+        res.redirect("/");
+      } else {
+        res.redirect(
+          client.buildEndSessionUrl(config, {
+            client_id: process.env.REPL_ID!,
+            post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
+          }).href
+        );
+      }
     });
   });
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
+  // In development mode, allow all requests to pass through for testing
+  if (process.env.NODE_ENV === "development") {
+    // Create a mock user if not authenticated
+    if (!req.isAuthenticated()) {
+      req.user = { 
+        claims: { 
+          sub: "dev-user-123", 
+          email: "dev@example.com", 
+          first_name: "Dev", 
+          last_name: "User" 
+        },
+        access_token: "dev-token",
+        expires_at: Math.floor(Date.now() / 1000) + 3600
+      };
+    }
+    return next();
+  }
+
   const user = req.user as any;
 
   if (!req.isAuthenticated() || !user.expires_at) {
@@ -149,6 +195,10 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
 
   try {
     const config = await getOidcConfig();
+    if (!config) {
+      // In development, don't try to refresh tokens
+      return next();
+    }
     const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
     updateUserSession(user, tokenResponse);
     return next();

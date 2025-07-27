@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "setup": "npm install && npm run db:setup",
+    "db:setup": "createdb altmed 2>/dev/null || true && npm run db:push",
+    "dev:local": "cross-env NODE_ENV=development PORT=3000 tsx server/index.ts",
+    "seed": "tsx scripts/seed.ts"
+  }
+}

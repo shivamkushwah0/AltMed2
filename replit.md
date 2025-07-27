@@ -7,6 +7,7 @@ AltMed is a modern web application designed to help users find alternative medic
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+Local development setup: User wants to run the application on their local machine using localhost.
 
 ## System Architecture
 
@@ -101,6 +102,8 @@ The application uses a PostgreSQL database with the following main entities:
 - **Hot Reloading**: Vite dev server with HMR support
 - **Database**: Development database with auto-migration
 - **Environment**: NODE_ENV=development
+- **Local Setup**: Configured for localhost development with setup scripts
+- **Port Configuration**: Default port 5000, alternative port 3000 available
 
 ### Production Build
 - **Frontend**: Vite builds optimized React bundle to `dist/public`

@@ -22,8 +22,9 @@ import {
   type InsertSearchHistory,
   type MedicationWithDetails,
   type PharmacyWithStock,
-} from "@shared/schema";
-import { db } from "./db";
+} from "../shared/schema.ts";
+import { db } from "./db.ts";
+
 
 // For local development without database, we'll use memory storage
 const isDevelopment = process.env.NODE_ENV === 'development' && !process.env.DATABASE_URL;

@@ -1,9 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
-import { analyzeSymptomsAndRecommendMedications, generateMedicationComparison } from "./services/gemini";
-import { insertSearchHistorySchema, insertUserFavoriteSchema } from "@shared/schema";
+import { storage } from "./storage.ts";
+import { setupAuth, isAuthenticated } from "./replitAuth.ts";
+import { analyzeSymptomsAndRecommendMedications, generateMedicationComparison } from "./services/gemini.ts";
+import { insertSearchHistorySchema, insertUserFavoriteSchema } from "../shared/schema.ts";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {

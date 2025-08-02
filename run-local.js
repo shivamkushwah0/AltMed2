@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 
-// Simple script to run the app locally on port 3000
+import dotnet from 'dotenv';
+dotnet.config();// Simple script to run the app locally on port 3000
 process.env.NODE_ENV = 'development';
 process.env.PORT = '3000';
+
+
 
 // Set default session secret if not provided
 if (!process.env.SESSION_SECRET) {

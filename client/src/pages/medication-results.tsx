@@ -16,6 +16,8 @@ import type { Symptom, MedicationWithDetails } from "@shared/schema";
 interface SearchResults {
   symptoms: Symptom[];
   medications: MedicationWithDetails[];
+  searchedSymptoms: string[];
+  symptomCount: number;
   aiAnalysis: {
     symptomAnalysis: string;
     warnings: string[];
@@ -115,7 +117,7 @@ export default function MedicationResults() {
     <div className="max-w-md mx-auto bg-white min-h-screen">
       {/* Header */}
       <header className="bg-white px-6 py-4 border-b border-gray-100">
-        <div className="flex items-center">
+        <div className="flex items-center mb-4">
           <Button 
             variant="ghost" 
             size="sm" 
@@ -126,8 +128,22 @@ export default function MedicationResults() {
             <ArrowLeft className="h-5 w-5 text-gray-600" />
           </Button>
           <h1 className="text-xl font-semibold text-gray-900" data-testid="text-search-results-title">
-            {searchResults.symptoms.map(s => s.name).join(', ')}
+            Search Results
           </h1>
+        </div>
+        
+        {/* Display searched symptoms */}
+        <div className="space-y-2">
+          <p className="text-sm text-gray-600">
+            Searched for {searchResults.symptomCount} symptom{searchResults.symptomCount !== 1 ? 's' : ''}:
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {searchResults.searchedSymptoms.map((symptom, index) => (
+              <Badge key={index} variant="secondary" className="text-sm">
+                {symptom}
+              </Badge>
+            ))}
+          </div>
         </div>
       </header>
 

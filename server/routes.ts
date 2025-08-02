@@ -1,9 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage.ts";
-import { setupAuth, isAuthenticated } from "./replitAuth.ts";
-import { analyzeSymptomsAndRecommendMedications, generateMedicationComparison } from "./services/gemini.ts";
-import { insertSearchHistorySchema, insertUserFavoriteSchema } from "../shared/schema.ts";
+import { storage } from "./storage";
+import { setupAuth, isAuthenticated } from "./replitAuth";
+import { analyzeSymptomsAndRecommendMedications, generateMedicationComparison } from "./services/gemini";
+import { insertSearchHistorySchema, insertUserFavoriteSchema } from "@shared/schema";
+import { MAX_SYMPTOMS } from "@shared/constants";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -72,31 +73,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { symptoms: symptomNames, userId } = req.body;
       
+      // Enhanced validation for multiple symptoms
       if (!Array.isArray(symptomNames) || symptomNames.length === 0) {
         return res.status(400).json({ message: "Symptoms array is required" });
       }
 
-      // Get matching symptoms from database
+      if (symptomNames.length > MAX_SYMPTOMS) {
+        return res.status(400).json({ 
+          message: `Too many symptoms provided. Maximum ${MAX_SYMPTOMS} symptoms allowed.` 
+        });
+      }
+
+      // Validate each symptom is a non-empty string
+      const validSymptoms = symptomNames.filter(symptom => 
+        typeof symptom === 'string' && symptom.trim().length > 0
+      );
+
+      if (validSymptoms.length === 0) {
+        return res.status(400).json({ message: "No valid symptoms provided" });
+      }
+
+      // Get matching symptoms from database using valid symptoms
       const allSymptoms = await storage.getSymptoms();
       const matchingSymptoms = allSymptoms.filter(symptom => 
-        symptomNames.some(name => 
+        validSymptoms.some(name => 
           symptom.name.toLowerCase().includes(name.toLowerCase()) ||
           name.toLowerCase().includes(symptom.name.toLowerCase())
         )
       );
 
-      if (matchingSymptoms.length === 0) {
+      // Enhanced symptom matching - also create custom symptom entries for user inputs
+      const customSymptoms: any[] = [];
+      validSymptoms.forEach(symptomName => {
+        const exactMatch = allSymptoms.find(s => 
+          s.name.toLowerCase() === symptomName.toLowerCase()
+        );
+        if (!exactMatch) {
+          // Create a temporary symptom object for custom symptoms
+          customSymptoms.push({
+            id: `custom_${Date.now()}_${Math.random()}`,
+            name: symptomName.trim(),
+            description: `User-reported symptom: ${symptomName.trim()}`,
+            isCommon: false,
+            createdAt: new Date()
+          });
+        }
+      });
+
+      const allRelevantSymptoms = [...matchingSymptoms, ...customSymptoms];
+
+      if (allRelevantSymptoms.length === 0) {
         return res.status(404).json({ message: "No matching symptoms found" });
       }
 
-      // Get medications for these symptoms
+      // Get medications for database symptoms only
       const symptomIds = matchingSymptoms.map(s => s.id);
       const medications = await storage.getMedicationsBySymptom(symptomIds);
 
-      // Use Gemini to analyze and recommend
+      // Use Gemini to analyze and recommend with all symptoms (including custom ones)
       const aiRecommendation = await analyzeSymptomsAndRecommendMedications(
-        symptomNames,
-        allSymptoms,
+        validSymptoms,
+        allRelevantSymptoms,
         medications
       );
 
@@ -105,7 +142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           await storage.addSearchHistory({
             userId,
-            searchQuery: symptomNames.join(', '),
+            searchQuery: validSymptoms.join(', '),
             symptomIds,
           });
         } catch (error) {
@@ -128,8 +165,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .sort((a, b) => b.aiPriority - a.aiPriority);
 
       res.json({
-        symptoms: matchingSymptoms,
+        symptoms: allRelevantSymptoms,
         medications: sortedMedications,
+        searchedSymptoms: validSymptoms,
+        symptomCount: validSymptoms.length,
         aiAnalysis: {
           symptomAnalysis: aiRecommendation.symptomAnalysis,
           warnings: aiRecommendation.warnings,

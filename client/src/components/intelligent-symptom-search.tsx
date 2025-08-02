@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Search, X } from "lucide-react";
+import { Search, X, AlertCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import type { Symptom } from "@shared/schema";
+import { MAX_SYMPTOMS } from "@shared/constants";
 
 interface IntelligentSymptomSearchProps {
   onSymptomSelect: (symptoms: string[]) => void;
@@ -120,6 +121,7 @@ export default function IntelligentSymptomSearch({
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const [errorMessage, setErrorMessage] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -188,22 +190,25 @@ export default function IntelligentSymptomSearch({
   };
 
   const selectSymptom = (symptomName: string) => {
+    // Check if we've reached the maximum number of symptoms
+    if (selectedSymptoms.length >= MAX_SYMPTOMS) {
+      setErrorMessage(`You can only add up to ${MAX_SYMPTOMS} symptoms`);
+      setTimeout(() => setErrorMessage(""), 3000);
+      return;
+    }
+
     const newSymptoms = [...selectedSymptoms, symptomName];
     setSelectedSymptoms(newSymptoms);
     setQuery("");
     setIsDropdownOpen(false);
+    setErrorMessage("");
     inputRef.current?.focus();
-    
-    // Trigger search immediately when a symptom is selected
-    onSymptomSelect(newSymptoms);
   };
 
   const removeSymptom = (symptomName: string) => {
     const newSymptoms = selectedSymptoms.filter(s => s !== symptomName);
     setSelectedSymptoms(newSymptoms);
-    if (newSymptoms.length > 0) {
-      onSymptomSelect(newSymptoms);
-    }
+    setErrorMessage("");
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -211,56 +216,106 @@ export default function IntelligentSymptomSearch({
     if (selectedSymptoms.length > 0) {
       onSymptomSelect(selectedSymptoms);
     } else if (query.trim()) {
+      // Check if we've reached the maximum number of symptoms
+      if (selectedSymptoms.length >= MAX_SYMPTOMS) {
+        setErrorMessage(`You can only add up to ${MAX_SYMPTOMS} symptoms`);
+        setTimeout(() => setErrorMessage(""), 3000);
+        return;
+      }
+      
       // If user types something and presses enter, add it as a custom symptom
       const newSymptoms = [query.trim()];
       setSelectedSymptoms(newSymptoms);
-      onSymptomSelect(newSymptoms);
       setQuery("");
       setIsDropdownOpen(false);
+      setErrorMessage("");
+    }
+  };
+
+  const handleSearch = () => {
+    if (selectedSymptoms.length > 0) {
+      onSymptomSelect(selectedSymptoms);
+    } else {
+      setErrorMessage("Please add at least one symptom to search");
+      setTimeout(() => setErrorMessage(""), 3000);
     }
   };
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
       <form onSubmit={handleSubmit}>
+        {/* Error Message */}
+        {errorMessage && (
+          <div className="flex items-center gap-2 mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
         {/* Selected Symptoms */}
         {selectedSymptoms.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3">
-            {selectedSymptoms.map((symptom) => (
-              <div 
-                key={symptom}
-                className="inline-flex items-center gap-1 bg-primary/10 text-primary px-3 py-1 rounded-full text-sm"
-              >
-                <span>{symptom}</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-4 w-4 p-0 hover:bg-primary/20"
-                  onClick={() => removeSymptom(symptom)}
+          <div className="mb-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-gray-700">
+                Selected symptoms ({selectedSymptoms.length}/{MAX_SYMPTOMS}):
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {selectedSymptoms.map((symptom) => (
+                <div 
+                  key={symptom}
+                  className="inline-flex items-center gap-1 bg-primary/10 text-primary px-3 py-1 rounded-full text-sm"
                 >
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            ))}
+                  <span>{symptom}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-4 w-4 p-0 hover:bg-primary/20"
+                    onClick={() => removeSymptom(symptom)}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
         {/* Search Input */}
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-          <Input
-            ref={inputRef}
-            type="text"
-            placeholder={selectedSymptoms.length > 0 ? "Add another symptom..." : placeholder}
-            className="w-full pl-12 pr-4 py-4 bg-gray-100 rounded-xl border-none outline-none focus:ring-2 focus:ring-primary/20 text-gray-700"
-            value={query}
-            onChange={handleInputChange}
-            onFocus={handleInputFocus}
-            onKeyDown={handleKeyDown}
-            autoComplete="off"
-            data-testid="input-symptom-search"
-          />
+        <div className="flex gap-2 items-start">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+            <Input
+              ref={inputRef}
+              type="text"
+              placeholder={
+                selectedSymptoms.length >= MAX_SYMPTOMS 
+                  ? `Maximum ${MAX_SYMPTOMS} symptoms reached`
+                  : selectedSymptoms.length > 0 
+                    ? "Add another symptom..." 
+                    : placeholder
+              }
+              className="w-full pl-12 pr-4 py-4 bg-gray-100 rounded-xl border-none outline-none focus:ring-2 focus:ring-primary/20 text-gray-700"
+              value={query}
+              onChange={handleInputChange}
+              onFocus={handleInputFocus}
+              onKeyDown={handleKeyDown}
+              autoComplete="off"
+              data-testid="input-symptom-search"
+              disabled={selectedSymptoms.length >= MAX_SYMPTOMS}
+            />
+          </div>
+          
+          {/* Search Button */}
+          <Button
+            type="button"
+            onClick={handleSearch}
+            className="px-6 py-4 bg-primary hover:bg-primary/90 text-white rounded-xl font-medium"
+            disabled={selectedSymptoms.length === 0}
+          >
+            Search
+          </Button>
         </div>
       </form>
 

@@ -22,7 +22,7 @@ export async function analyzeSymptomsAndRecommendMedications(
 ): Promise<MedicationRecommendation> {
   try {
     console.log(process.env.GEMINI_API_KEY);
-    const systemPrompt = `You are a medical AI assistant that helps recommend over-the-counter medications based on symptoms.
+    const systemPrompt = `You are a medical AI assistant that helps recommend over-the-counter medications based on multiple symptoms.
     
 Guidelines:
 - Only recommend medications from the provided list
@@ -32,6 +32,10 @@ Guidelines:
 - Rate priority on a scale of 1-10 (higher = more recommended)
 - Consider drug interactions and contraindications
 - Recommend seeing a healthcare provider for serious symptoms
+- When analyzing multiple symptoms, consider the relationships between them
+- Look for common underlying conditions that might cause multiple symptoms
+- Prioritize medications that can address multiple symptoms effectively
+- Provide specific analysis for each symptom combination
 
 Available symptoms: ${availableSymptoms.map((s) => `${s.name}: ${s.description || "No description"}`).join(", ")}
 
@@ -44,20 +48,24 @@ Available medications: ${availableMedications
 
 Respond with JSON in this exact format:
 {
-  "symptomAnalysis": "Brief analysis of the symptoms",
+  "symptomAnalysis": "Comprehensive analysis of the symptom combination, potential causes, and severity assessment",
   "recommendedMedications": [
     {
       "medicationId": "medication_id_from_list",
-      "reasoning": "Why this medication is recommended",
+      "reasoning": "Why this medication is recommended for these specific symptoms",
       "effectiveness": 1-5,
       "priority": 1-10
     }
   ],
-  "warnings": ["Important warnings or precautions"],
-  "additionalAdvice": "General advice and when to see a doctor"
+  "warnings": ["Important warnings or precautions specific to this symptom combination"],
+  "additionalAdvice": "Comprehensive advice including when to see a doctor, lifestyle recommendations, and follow-up care"
 }`;
 
-    const userPrompt = `Analyze these symptoms and recommend appropriate medications: ${symptoms.join(", ")}`;
+    const symptomCountNote = symptoms.length > 1 
+      ? ` Note: The user has reported ${symptoms.length} symptoms together - analyze the combination carefully for potential underlying conditions.`
+      : '';
+
+    const userPrompt = `Analyze these symptoms and recommend appropriate medications: ${symptoms.join(", ")}${symptomCountNote}`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-pro",

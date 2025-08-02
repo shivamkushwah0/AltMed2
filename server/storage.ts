@@ -43,6 +43,9 @@ export interface IStorage {
   getSymptomByName(name: string): Promise<Symptom | undefined>;
   createSymptom(symptom: InsertSymptom): Promise<Symptom>;
   
+  // Medication-Symptom relationships
+  createMedicationSymptom(relationship: { medicationId: string; symptomId: string; effectiveness: number }): Promise<any>;
+  
   // Pharmacy operations
   getPharmacies(): Promise<Pharmacy[]>;
   getNearbyPharmacies(lat: number, lng: number, radius: number): Promise<PharmacyWithStock[]>;
@@ -184,6 +187,14 @@ export class DatabaseStorage implements IStorage {
       .values(symptom)
       .returning();
     return newSymptom;
+  }
+
+  async createMedicationSymptom(relationship: { medicationId: string; symptomId: string; effectiveness: number }) {
+    const [result] = await db
+      .insert(medicationSymptoms)
+      .values(relationship)
+      .returning();
+    return result;
   }
 
   // Pharmacy operations

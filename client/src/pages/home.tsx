@@ -1,18 +1,17 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Search, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import BottomNavigation from "@/components/bottom-navigation";
 import SymptomButton from "@/components/symptom-button";
+import IntelligentSymptomSearch from "@/components/intelligent-symptom-search";
 import { useAuth } from "@/hooks/useAuth";
 import type { Symptom, SearchHistory } from "@shared/schema";
 
 export default function Home() {
   const [, setLocation] = useLocation();
-  const [searchQuery, setSearchQuery] = useState("");
   const { user } = useAuth();
 
   const { data: commonSymptoms = [] } = useQuery<Symptom[]>({
@@ -31,12 +30,7 @@ export default function Home() {
     setLocation(`/results?${searchParams.toString()}`);
   };
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      handleSymptomSearch([searchQuery.trim()]);
-    }
-  };
+
 
   return (
     <div className="max-w-md mx-auto bg-white min-h-screen relative pb-20">
@@ -59,18 +53,11 @@ export default function Home() {
           </Button>
         </div>
         
-        {/* Search Bar */}
-        <form onSubmit={handleSearchSubmit} className="relative">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-          <Input
-            type="text"
-            placeholder="Enter your symptoms"
-            className="w-full pl-12 pr-4 py-4 bg-gray-100 rounded-xl border-none outline-none focus:ring-2 focus:ring-primary/20 text-gray-700"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            data-testid="input-search-symptoms"
-          />
-        </form>
+        {/* Intelligent Symptom Search */}
+        <IntelligentSymptomSearch
+          onSymptomSelect={handleSymptomSearch}
+          placeholder="Enter your symptoms"
+        />
       </header>
 
       {/* Main Content */}

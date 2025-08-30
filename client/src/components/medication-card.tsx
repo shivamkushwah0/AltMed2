@@ -6,16 +6,18 @@ import type { MedicationWithDetails } from "@shared/schema";
 
 interface MedicationCardProps {
   medication: MedicationWithDetails;
-  onCompare: () => void;
+  onCompare?: () => void;
   onViewDetails: () => void;
   showFavoriteButton?: boolean;
+  showCompareButton?: boolean;
 }
 
 export default function MedicationCard({ 
   medication, 
   onCompare, 
   onViewDetails,
-  showFavoriteButton = true
+  showFavoriteButton = true,
+  showCompareButton = true
 }: MedicationCardProps) {
   return (
     <Card className="bg-white border border-gray-200 rounded-xl overflow-hidden">
@@ -59,17 +61,19 @@ export default function MedicationCard({
         </div>
         
         <div className="flex gap-2">
+          {showCompareButton && onCompare && (
+            <Button 
+              variant="outline"
+              className="flex-1 py-2 text-primary font-medium hover:bg-primary/5"
+              onClick={onCompare}
+              data-testid={`button-compare-${medication.id}`}
+            >
+              Compare
+            </Button>
+          )}
           <Button 
             variant="outline"
-            className="flex-1 py-2 text-primary font-medium hover:bg-primary/5"
-            onClick={onCompare}
-            data-testid={`button-compare-${medication.id}`}
-          >
-            Compare
-          </Button>
-          <Button 
-            variant="outline"
-            className="flex-1 py-2"
+            className={`${showCompareButton && onCompare ? 'flex-1' : 'w-full'} py-2`}
             onClick={onViewDetails}
             data-testid={`button-view-details-${medication.id}`}
           >

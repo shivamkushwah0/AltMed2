@@ -2,7 +2,7 @@
 
 import dotnet from 'dotenv';
 dotnet.config();// Simple script to run the app locally on port 3000
-process.env.NODE_ENV = 'development';
+//process.env.NODE_ENV = 'development';
 process.env.PORT = '3000';
 
 

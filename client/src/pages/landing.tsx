@@ -54,14 +54,14 @@ export default function Landing() {
               onClick={() => {
                 // In development, directly navigate to the home page
                 // Check for development environment (Vite sets DEV to true in development)
-                if (import.meta.env.DEV || import.meta.env.NODE_ENV === 'development') {
-                  window.location.reload();
-                  setTimeout(() => {
-                    window.location.href = '/';
-                  }, 100);
-                } else {
+                
+                //   window.location.reload();
+                //   setTimeout(() => {
+                //     window.location.href = '/';
+                //   }, 100);
+                // } else {
                   window.location.href = '/api/login';
-                }
+                // }
               }}
               data-testid="button-login"
             >

@@ -26,8 +26,8 @@ import {
 import { db } from "./db.ts";
 
 
-// For local development without database, we'll use memory storage
-const isDevelopment = process.env.NODE_ENV === 'development' && !process.env.DATABASE_URL;
+// Switch behavior solely via NODE_ENV
+const isDevelopment = process.env.NODE_ENV === 'development';
 let memoryStore: { [key: string]: any[] } = {};
 
 if (isDevelopment) {
@@ -86,7 +86,8 @@ if (isDevelopment) {
         phone: "(555) 123-4567",
         hours: "Mon-Fri: 9AM-9PM, Sat-Sun: 10AM-6PM"
       }
-    ]
+      ],
+      userFavorites: [],
   };
 }
 import { eq, and, ilike, sql, desc, inArray } from "drizzle-orm";
@@ -94,7 +95,9 @@ import { eq, and, ilike, sql, desc, inArray } from "drizzle-orm";
 export interface IStorage {
   // User operations (required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
+  updateUserProfile(userId: string, updates: { firstName: string; lastName: string }): Promise<User>;
 
   // Medication operations
   getMedications(): Promise<Medication[]>;
@@ -130,6 +133,11 @@ export class DatabaseStorage implements IStorage {
   // User operations (required for Replit Auth)
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
     return user;
   }
 
@@ -392,13 +400,37 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return newSearch;
   }
+
+  async updateUserProfile(userId: string, updates: { firstName: string; lastName: string }): Promise<User> {
+    const [updatedUser] = await db
+      .update(users)
+      .set({
+        firstName: updates.firstName,
+        lastName: updates.lastName,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    
+    if (!updatedUser) {
+      throw new Error("User not found");
+    }
+    
+    return updatedUser;
+  }
 }
 
 // Create a memory storage class for local development
 class MemoryStorage implements IStorage {
   // User operations (required for Replit Auth)
   async getUser(id: string): Promise<User | undefined> {
-    return memoryStore.users?.find((u: any) => u.id === id);
+    if (!memoryStore.users) return undefined;
+    return memoryStore.users.find((user: User) => user.id === id);
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    if (!memoryStore.users) return undefined;
+    return memoryStore.users.find((user: any) => user.email === email);
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
@@ -456,6 +488,16 @@ class MemoryStorage implements IStorage {
     return newSymptom as Symptom;
   }
 
+  async createMedicationSymptom(relationship: { medicationId: string; symptomId: string; effectiveness: number }): Promise<any> {
+    // For memory storage, we'll just return the relationship as is
+    return {
+      ...relationship,
+      id: `medsym-${Date.now()}`,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+  }
+
   // Pharmacy operations
   async getPharmacies(): Promise<Pharmacy[]> {
     return memoryStore.pharmacies || [];
@@ -477,15 +519,31 @@ class MemoryStorage implements IStorage {
 
   // User favorites
   async getUserFavorites(userId: string): Promise<MedicationWithDetails[]> {
-    return [];
+    const favs = (memoryStore.userFavorites || []).filter((f: any) => f.userId === userId);
+    const meds = memoryStore.medications || [];
+    const result: MedicationWithDetails[] = favs
+      .map((f: any) => meds.find((m: any) => m.id === f.medicationId))
+      .filter(Boolean)
+      .map((m: any) => ({ ...m, symptoms: [] }));
+    return result;
   }
 
   async addFavorite(favorite: InsertUserFavorite): Promise<UserFavorite> {
-    return { ...favorite, id: `fav-${Date.now()}`, createdAt: new Date() } as UserFavorite;
+    if (!memoryStore.userFavorites) memoryStore.userFavorites = [];
+    const exists = memoryStore.userFavorites.find(
+      (f: any) => f.userId === favorite.userId && f.medicationId === favorite.medicationId,
+    );
+    if (exists) return exists as UserFavorite;
+    const newFav = { ...favorite, id: `fav-${Date.now()}`, createdAt: new Date() } as UserFavorite;
+    memoryStore.userFavorites.push(newFav);
+    return newFav;
   }
 
   async removeFavorite(userId: string, medicationId: string): Promise<void> {
-    // No-op for memory storage
+    if (!memoryStore.userFavorites) return;
+    memoryStore.userFavorites = memoryStore.userFavorites.filter(
+      (f: any) => !(f.userId === userId && f.medicationId === medicationId),
+    );
   }
 
   // Search history
@@ -495,6 +553,23 @@ class MemoryStorage implements IStorage {
 
   async addSearchHistory(search: InsertSearchHistory): Promise<SearchHistory> {
     return { ...search, id: `search-${Date.now()}`, createdAt: new Date() } as SearchHistory;
+  }
+
+  async updateUserProfile(userId: string, updates: { firstName: string; lastName: string }): Promise<User> {
+    if (!memoryStore.users) throw new Error("User not found");
+    
+    const userIndex = memoryStore.users.findIndex((u: any) => u.id === userId);
+    if (userIndex === -1) throw new Error("User not found");
+    
+    const updatedUser = {
+      ...memoryStore.users[userIndex],
+      firstName: updates.firstName,
+      lastName: updates.lastName,
+      updatedAt: new Date(),
+    };
+    
+    memoryStore.users[userIndex] = updatedUser;
+    return updatedUser as User;
   }
 }
 

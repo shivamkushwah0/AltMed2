@@ -85,14 +85,9 @@ export default function Favorites() {
               <MedicationCard
                 key={medication.id}
                 medication={medication}
-                onCompare={() => {
-                  const searchParams = new URLSearchParams({
-                    med1: medication.id,
-                  });
-                  setLocation(`/compare?${searchParams.toString()}`);
-                }}
                 onViewDetails={() => setLocation(`/medication/${medication.id}`)}
                 showFavoriteButton={false}
+                showCompareButton={false}
               />
             ))}
           </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
@@ -7,15 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import MedicationCard from "@/components/medication-card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
 import type { Symptom, MedicationWithDetails } from "@shared/schema";
 
-interface SearchResults {
-  symptoms: Symptom[];
-  medications: MedicationWithDetails[];
+interface AiAnalysisResponse {
   searchedSymptoms: string[];
   symptomCount: number;
   aiAnalysis: {
@@ -23,35 +22,104 @@ interface SearchResults {
     warnings: string[];
     additionalAdvice: string;
   };
+  aiRecommendations: {
+    medicationId: string;
+    reasoning: string;
+    effectiveness: number;
+    priority: number;
+  }[];
+}
+
+interface MedicationsResponse {
+  symptoms: Symptom[];
+  medications: MedicationWithDetails[];
+  searchedSymptoms: string[];
+  symptomCount: number;
 }
 
 export default function MedicationResults() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/results");
-  const [searchResults, setSearchResults] = useState<SearchResults | null>(null);
+  const [searchedSymptoms, setSearchedSymptoms] = useState<string[]>([]);
+  const [symptomCount, setSymptomCount] = useState<number>(0);
+  const [symptomsList, setSymptomsList] = useState<Symptom[]>([]);
+  const [medications, setMedications] = useState<MedicationWithDetails[]>([]);
+  const [aiAnalysis, setAiAnalysis] = useState<AiAnalysisResponse["aiAnalysis"] | null>(null);
+  const [aiRecs, setAiRecs] = useState<AiAnalysisResponse["aiRecommendations"]>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [firstCompareMedId, setFirstCompareMedId] = useState<string | null>(null);
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const searchMutation = useMutation<SearchResults, Error, string[]>({
+  const medicationsMutation = useMutation<MedicationsResponse, Error, string[]>({
     mutationFn: async (symptoms: string[]) => {
-      const response = await apiRequest("POST", "/api/search/symptoms", {
+      const response = await apiRequest("POST", "/api/search/symptoms/medications", {
         symptoms,
         userId: user?.id || null,
       });
       return response.json();
     },
     onSuccess: (data) => {
-      setSearchResults(data);
+      setSymptomsList(data.symptoms);
+      setMedications(enrichAndSortWithAi(data.medications, aiRecs));
+      setSearchedSymptoms(data.searchedSymptoms);
+      setSymptomCount(data.symptomCount);
     },
     onError: (error) => {
       toast({
-        title: "Search Failed",
-        description: "Failed to search for medications. Please try again.",
+        title: "Loading medications failed",
+        description: "Could not fetch medications. Please try again.",
         variant: "destructive",
       });
-      console.error("Search error:", error);
+      console.error("Medications search error:", error);
     },
   });
+
+  const aiMutation = useMutation<AiAnalysisResponse, Error, string[]>({
+    mutationFn: async (symptoms: string[]) => {
+      const response = await apiRequest("POST", "/api/search/symptoms/ai", {
+        symptoms,
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setAiAnalysis(data.aiAnalysis);
+      setAiRecs(data.aiRecommendations);
+      // if medications already loaded, enrich and resort
+      setMedications((prev) => enrichAndSortWithAi(prev, data.aiRecommendations));
+      // also set searched symptoms if not set by meds yet (e.g., meds 404)
+      if (searchedSymptoms.length === 0) {
+        setSearchedSymptoms(data.searchedSymptoms);
+        setSymptomCount(data.symptomCount);
+      }
+    },
+    onError: (error) => {
+      toast({
+        title: "AI Overview failed",
+        description: "Could not generate AI analysis. You can still view medications.",
+        variant: "destructive",
+      });
+      console.error("AI analysis error:", error);
+    },
+  });
+
+  function enrichAndSortWithAi(
+    meds: MedicationWithDetails[],
+    recs: AiAnalysisResponse["aiRecommendations"],
+  ): (MedicationWithDetails & { aiPriority?: number; aiEffectiveness?: number; aiReasoning?: string })[] {
+    if (!recs || recs.length === 0) return meds;
+    const map = new Map(recs.map((r) => [r.medicationId, r]));
+    const enriched = meds.map((m) => {
+      const r = map.get(m.id);
+      return {
+        ...m,
+        aiPriority: r?.priority || 0,
+        aiEffectiveness: r?.effectiveness || 0,
+        aiReasoning: r?.reasoning || "",
+      };
+    });
+    return enriched.sort((a, b) => (b.aiPriority || 0) - (a.aiPriority || 0));
+  }
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -60,7 +128,8 @@ export default function MedicationResults() {
     if (symptomsParam) {
       const symptoms = symptomsParam.split(',').map(s => s.trim()).filter(Boolean);
       if (symptoms.length > 0) {
-        searchMutation.mutate(symptoms);
+        medicationsMutation.mutate(symptoms);
+        aiMutation.mutate(symptoms);
       }
     }
   }, []);
@@ -69,7 +138,10 @@ export default function MedicationResults() {
     setLocation('/');
   };
 
-  if (searchMutation.isPending) {
+  const isLoadingMeds = medicationsMutation.isPending;
+  const isLoadingAi = aiMutation.isPending;
+
+  if (isLoadingMeds && isLoadingAi && medications.length === 0 && !aiAnalysis) {
     return (
       <div className="max-w-md mx-auto bg-white min-h-screen">
         <header className="bg-white px-6 py-4 border-b border-gray-100">
@@ -81,18 +153,24 @@ export default function MedicationResults() {
           </div>
         </header>
         <main className="px-6 py-6 space-y-6">
-          <Skeleton className="h-8 w-48" />
           <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-32 w-full" />
-            ))}
+            <div>
+              <div className="mb-2 text-sm text-gray-600">AI Overview</div>
+              <Skeleton className="h-24 w-full" />
+            </div>
+            <div>
+              <div className="mb-2 text-sm text-gray-600">Loading medications</div>
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-32 w-full" />
+              ))}
+            </div>
           </div>
         </main>
       </div>
     );
   }
 
-  if (!searchResults) {
+  if (medications.length === 0 && !aiAnalysis && !(isLoadingMeds || isLoadingAi)) {
     return (
       <div className="max-w-md mx-auto bg-white min-h-screen">
         <header className="bg-white px-6 py-4 border-b border-gray-100">
@@ -110,8 +188,20 @@ export default function MedicationResults() {
     );
   }
 
-  const prescriptionMeds = searchResults.medications.filter((med: any) => med.category === 'prescription');
-  const otcMeds = searchResults.medications.filter((med: any) => med.category === 'otc');
+  const prescriptionMeds = medications.filter((med: any) => med.category === 'prescription');
+  const otcMeds = medications.filter((med: any) => med.category === 'otc');
+
+  const openCompareFor = (medId: string) => {
+    setFirstCompareMedId(medId);
+    setCompareOpen(true);
+  };
+
+  const handleSelectSecondMed = (secondId: string) => {
+    if (!firstCompareMedId) return;
+    const params = new URLSearchParams({ med1: firstCompareMedId, med2: secondId });
+    setCompareOpen(false);
+    setLocation(`/compare?${params.toString()}`);
+  };
 
   return (
     <div className="max-w-md mx-auto bg-white min-h-screen">
@@ -135,10 +225,10 @@ export default function MedicationResults() {
         {/* Display searched symptoms */}
         <div className="space-y-2">
           <p className="text-sm text-gray-600">
-            Searched for {searchResults.symptomCount} symptom{searchResults.symptomCount !== 1 ? 's' : ''}:
+            Searched for {symptomCount} symptom{symptomCount !== 1 ? 's' : ''}:
           </p>
           <div className="flex flex-wrap gap-2">
-            {searchResults.searchedSymptoms.map((symptom, index) => (
+            {searchedSymptoms.map((symptom, index) => (
               <Badge key={index} variant="secondary" className="text-sm">
                 {symptom}
               </Badge>
@@ -149,68 +239,69 @@ export default function MedicationResults() {
 
       <main className="px-6 py-6 space-y-6">
         {/* AI Analysis */}
-        {searchResults.aiAnalysis && (
-          <Card className="bg-blue-50 border-blue-200">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg text-blue-900">AI Analysis</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-blue-800 text-sm">{searchResults.aiAnalysis.symptomAnalysis}</p>
-              
-              {searchResults.aiAnalysis.warnings.length > 0 && (
+        <section>
+          <div className="mb-2 text-sm text-gray-600">AI Overview</div>
+          {isLoadingAi && !aiAnalysis && (
+            <Skeleton className="h-24 w-full" />
+          )}
+          {!isLoadingAi && aiAnalysis && (
+            <Card className="bg-blue-50 border-blue-200">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg text-blue-900">AI Analysis</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-blue-800 text-sm">{aiAnalysis.symptomAnalysis}</p>
+                {aiAnalysis.warnings.length > 0 && (
+                  <div>
+                    <h4 className="font-medium text-blue-900 mb-2">Important Warnings:</h4>
+                    <ul className="list-disc list-inside space-y-1">
+                      {aiAnalysis.warnings.map((warning, index) => (
+                        <li key={index} className="text-blue-800 text-sm">{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <div>
-                  <h4 className="font-medium text-blue-900 mb-2">Important Warnings:</h4>
-                  <ul className="list-disc list-inside space-y-1">
-                    {searchResults.aiAnalysis.warnings.map((warning, index) => (
-                      <li key={index} className="text-blue-800 text-sm">{warning}</li>
-                    ))}
-                  </ul>
+                  <h4 className="font-medium text-blue-900 mb-2">Additional Advice:</h4>
+                  <p className="text-blue-800 text-sm">{aiAnalysis.additionalAdvice}</p>
                 </div>
-              )}
-              
-              <div>
-                <h4 className="font-medium text-blue-900 mb-2">Additional Advice:</h4>
-                <p className="text-blue-800 text-sm">{searchResults.aiAnalysis.additionalAdvice}</p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+              </CardContent>
+            </Card>
+          )}
+        </section>
 
         {/* Prescription Medications */}
-        {prescriptionMeds.length > 0 && (
-          <section>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4" data-testid="text-prescription-meds-title">
-              Prescription Medications
-            </h2>
+        <section>
+          <div className="mb-2 text-sm text-gray-600">{isLoadingMeds ? 'Loading medications' : 'Prescription Medications'}</div>
+          {isLoadingMeds && medications.length === 0 ? (
             <div className="space-y-4">
-              {prescriptionMeds.map((medication: any) => (
-                <Card key={medication.id} className="border border-gray-200">
-                  <CardContent className="p-4">
-                    <div className="flex items-start">
-                      <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center mr-3 mt-1">
-                        <svg className="w-4 h-4 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900">{medication.brandName}</h3>
-                        <p className="text-gray-600 text-sm mt-1">{medication.description}</p>
-                        {medication.aiReasoning && (
-                          <p className="text-primary text-sm mt-2">
-                            <strong>AI Recommendation:</strong> {medication.aiReasoning}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+              {[1, 2].map((i) => (
+                <Skeleton key={i} className="h-32 w-full" />
               ))}
             </div>
-          </section>
-        )}
+          ) : (
+            prescriptionMeds.length > 0 && (
+              <section>
+                <h2 className="text-lg font-semibold text-gray-900 mb-4" data-testid="text-prescription-meds-title">
+                  Prescription Medications
+                </h2>
+                <div className="space-y-4">
+                  {prescriptionMeds.map((medication: any) => (
+                    <MedicationCard
+                      key={medication.id}
+                      medication={medication}
+                      onCompare={() => openCompareFor(medication.id)}
+                      onViewDetails={() => setLocation(`/medication/${medication.id}`)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )
+          )}
+        </section>
 
         {/* OTC Alternatives */}
-        {otcMeds.length > 0 && (
+        {!isLoadingMeds && otcMeds.length > 0 && (
           <section>
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               <span className="text-secondary">OTC Alternatives</span>
@@ -220,12 +311,7 @@ export default function MedicationResults() {
                 <MedicationCard
                   key={medication.id}
                   medication={medication}
-                  onCompare={() => {
-                    const searchParams = new URLSearchParams({
-                      med1: medication.id,
-                    });
-                    setLocation(`/compare?${searchParams.toString()}`);
-                  }}
+                  onCompare={() => openCompareFor(medication.id)}
                   onViewDetails={() => setLocation(`/medication/${medication.id}`)}
                 />
               ))}
@@ -233,7 +319,7 @@ export default function MedicationResults() {
           </section>
         )}
 
-        {searchResults.medications.length === 0 && (
+        {!isLoadingMeds && medications.length === 0 && (
           <div className="text-center py-8">
             <p className="text-gray-600">
               No medications found for the specified symptoms. Please try different search terms or consult a healthcare professional.
@@ -241,6 +327,41 @@ export default function MedicationResults() {
           </div>
         )}
       </main>
+
+      {/* Compare Selection Dialog */}
+      <Dialog open={compareOpen} onOpenChange={setCompareOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select a medicine to compare</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-80 overflow-y-auto space-y-2">
+            {medications
+              .filter((m) => m.id !== firstCompareMedId)
+              .map((m) => (
+                <button
+                  key={m.id}
+                  className="w-full text-left p-3 border border-gray-200 rounded-lg hover:bg-gray-50"
+                  onClick={() => handleSelectSecondMed(m.id)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-medium text-gray-900">{m.brandName}</div>
+                      {m.genericName && (
+                        <div className="text-sm text-gray-500">{m.genericName}</div>
+                      )}
+                    </div>
+                    <Badge variant={m.category === 'otc' ? 'secondary' : 'default'} className="text-xs">
+                      {m.category === 'otc' ? 'OTC' : 'Rx'}
+                    </Badge>
+                  </div>
+                </button>
+              ))}
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button variant="outline" onClick={() => setCompareOpen(false)}>Cancel</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

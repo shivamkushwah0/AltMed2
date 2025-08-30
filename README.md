@@ -73,13 +73,23 @@ The application will be available at:
 - `http://localhost:5000` (default)
 - `http://localhost:3000` (local development)
 
+## Authentication
+
+- In development (`NODE_ENV=development`), a simple mock session is used for convenience.
+- In production (`NODE_ENV=production`), Google OAuth is enabled when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are provided. The callback URL is `${BASE_URL}/api/auth/google/callback`.
+
+Routes:
+- `GET /api/login` → starts Google login in production; mock login in development
+- `GET /api/logout` → logs out
+- `GET /api/auth/user` → returns the current user when authenticated
+
 ## API Endpoints
 
 - `GET /api/symptoms` - Get all symptoms
 - `GET /api/medications` - Get all medications
 - `POST /api/search/symptoms` - AI-powered symptom search
 - `GET /api/pharmacies/nearby` - Find nearby pharmacies
-- `GET /api/auth/user` - Get current user (development mode)
+- `GET /api/auth/user` - Get current user
 
 ## Project Structure
 
@@ -114,12 +124,9 @@ openssl rand -base64 32
 
 ## Production Deployment
 
-For production deployment on Replit or other platforms:
-
 1. Set `NODE_ENV=production`
-2. Configure proper authentication (Replit Auth for Replit deployments)
-3. Use a production PostgreSQL database
-4. Set secure environment variables
+2. Provide `DATABASE_URL`, `SESSION_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `BASE_URL`
+3. Build and start: `npm run build && npm start`
 
 ## Troubleshooting
 

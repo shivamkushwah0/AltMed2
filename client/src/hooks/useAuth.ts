@@ -2,17 +2,16 @@ import { useQuery } from "@tanstack/react-query";
 import type { User } from "@shared/schema";
 
 export function useAuth() {
-  const { data: user, isLoading, error } = useQuery<User>({
+  const localUserId = typeof window !== 'undefined' ? localStorage.getItem('altmed_user_id') : null;
+  const { data: user, isLoading } = useQuery<User>({
     queryKey: ["/api/auth/user"],
     retry: false,
+    enabled: !localUserId,
   });
-
-  // In development mode, always return authenticated if no user but no auth error
-  const isDevelopment = import.meta.env.DEV || import.meta.env.NODE_ENV === 'development';
-  
+  console.log(user, localUserId);
   return {
-    user,
-    isLoading,
-    isAuthenticated: isDevelopment ? true : !!user,
+    user: user || (localUserId ? ({ id: localUserId } as unknown as User) : undefined),
+    isLoading: isLoading && !localUserId,
+    isAuthenticated: !!localUserId || !!user,
   };
 }

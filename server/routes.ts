@@ -1,10 +1,10 @@
+import { storage } from "./storage.ts";
+import { setupAuth, isAuthenticated } from "./auth.ts";
+import { analyzeSymptomsAndRecommendMedications, generateMedicationComparison } from "./services/gemini.ts";
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
-import { analyzeSymptomsAndRecommendMedications, generateMedicationComparison } from "./services/gemini";
-import { insertSearchHistorySchema, insertUserFavoriteSchema } from "@shared/schema";
-import { MAX_SYMPTOMS } from "@shared/constants";
+import { insertSearchHistorySchema, insertUserFavoriteSchema } from "../shared/schema.ts";
+import { MAX_SYMPTOMS } from "../shared/constants.ts";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -181,6 +181,148 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Split endpoints: medications-only for symptoms
+  app.post('/api/search/symptoms/medications', async (req, res) => {
+    try {
+      const { symptoms: symptomNames, userId } = req.body;
+
+      if (!Array.isArray(symptomNames) || symptomNames.length === 0) {
+        return res.status(400).json({ message: "Symptoms array is required" });
+      }
+
+      if (symptomNames.length > MAX_SYMPTOMS) {
+        return res.status(400).json({
+          message: `Too many symptoms provided. Maximum ${MAX_SYMPTOMS} symptoms allowed.`,
+        });
+      }
+
+      const validSymptoms = symptomNames.filter(
+        (symptom: unknown) => typeof symptom === "string" && (symptom as string).trim().length > 0,
+      ) as string[];
+
+      if (validSymptoms.length === 0) {
+        return res.status(400).json({ message: "No valid symptoms provided" });
+      }
+
+      const allSymptoms = await storage.getSymptoms();
+      const matchingSymptoms = allSymptoms.filter((symptom) =>
+        validSymptoms.some((name) =>
+          symptom.name.toLowerCase().includes(name.toLowerCase()) ||
+          name.toLowerCase().includes(symptom.name.toLowerCase()),
+        ),
+      );
+
+      if (matchingSymptoms.length === 0) {
+        return res.status(404).json({ message: "No matching symptoms found" });
+      }
+
+      const symptomIds = matchingSymptoms.map((s) => s.id);
+      const medications = await storage.getMedicationsBySymptom(symptomIds);
+
+      // Save search history if user is authenticated
+      if (userId) {
+        try {
+          await storage.addSearchHistory({
+            userId,
+            searchQuery: validSymptoms.join(', '),
+            symptomIds,
+          });
+        } catch (error) {
+          console.error("Error saving search history:", error);
+        }
+      }
+
+      res.json({
+        symptoms: matchingSymptoms,
+        medications,
+        searchedSymptoms: validSymptoms,
+        symptomCount: validSymptoms.length,
+      });
+    } catch (error) {
+      console.error("Error searching medications by symptoms:", error);
+      res.status(500).json({ message: "Failed to fetch medications for symptoms" });
+    }
+  });
+
+  // Split endpoints: AI-only analysis for symptoms
+  app.post('/api/search/symptoms/ai', async (req, res) => {
+    try {
+      const { symptoms: symptomNames } = req.body;
+
+      if (!Array.isArray(symptomNames) || symptomNames.length === 0) {
+        return res.status(400).json({ message: "Symptoms array is required" });
+      }
+
+      if (symptomNames.length > MAX_SYMPTOMS) {
+        return res.status(400).json({
+          message: `Too many symptoms provided. Maximum ${MAX_SYMPTOMS} symptoms allowed.`,
+        });
+      }
+
+      const validSymptoms = symptomNames.filter(
+        (symptom: unknown) => typeof symptom === "string" && (symptom as string).trim().length > 0,
+      ) as string[];
+
+      if (validSymptoms.length === 0) {
+        return res.status(400).json({ message: "No valid symptoms provided" });
+      }
+
+      // Build relevant symptom list including custom user-reported ones
+      const allSymptoms = await storage.getSymptoms();
+      const matchingSymptoms = allSymptoms.filter((symptom) =>
+        validSymptoms.some((name) =>
+          symptom.name.toLowerCase().includes(name.toLowerCase()) ||
+          name.toLowerCase().includes(symptom.name.toLowerCase()),
+        ),
+      );
+
+      const customSymptoms: any[] = [];
+      validSymptoms.forEach((symptomName) => {
+        const exactMatch = allSymptoms.find(
+          (s) => s.name.toLowerCase() === symptomName.toLowerCase(),
+        );
+        if (!exactMatch) {
+          customSymptoms.push({
+            id: `custom_${Date.now()}_${Math.random()}`,
+            name: symptomName.trim(),
+            description: `User-reported symptom: ${symptomName.trim()}`,
+            isCommon: false,
+            createdAt: new Date(),
+          });
+        }
+      });
+
+      const allRelevantSymptoms = [...matchingSymptoms, ...customSymptoms];
+      if (allRelevantSymptoms.length === 0) {
+        return res.status(404).json({ message: "No matching symptoms found" });
+      }
+
+      // Provide medications related to matching DB symptoms as the allowed set for AI
+      const symptomIds = matchingSymptoms.map((s) => s.id);
+      const medicationsForAi = await storage.getMedicationsBySymptom(symptomIds);
+
+      const aiRecommendation = await analyzeSymptomsAndRecommendMedications(
+        validSymptoms,
+        allRelevantSymptoms,
+        medicationsForAi,
+      );
+
+      res.json({
+        searchedSymptoms: validSymptoms,
+        symptomCount: validSymptoms.length,
+        aiAnalysis: {
+          symptomAnalysis: aiRecommendation.symptomAnalysis,
+          warnings: aiRecommendation.warnings,
+          additionalAdvice: aiRecommendation.additionalAdvice,
+        },
+        aiRecommendations: aiRecommendation.recommendedMedications,
+      });
+    } catch (error) {
+      console.error("Error generating AI analysis:", error);
+      res.status(500).json({ message: "Failed to generate AI analysis" });
+    }
+  });
+
   // Medication comparison
   app.post('/api/medications/compare', async (req, res) => {
     try {
@@ -287,6 +429,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching search history:", error);
       res.status(500).json({ message: "Failed to fetch search history" });
+    }
+  });
+
+  // User profile routes (protected routes)
+  app.get('/api/user/profile', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+      res.status(500).json({ message: "Failed to fetch user profile" });
+    }
+  });
+
+  app.put('/api/user/profile', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { firstName, lastName } = req.body;
+      
+      if (!firstName || !lastName) {
+        return res.status(400).json({ message: "First name and last name are required" });
+      }
+
+      const updatedUser = await storage.updateUserProfile(userId, { firstName, lastName });
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Error updating user profile:", error);
+      res.status(500).json({ message: "Failed to update user profile" });
     }
   });
 

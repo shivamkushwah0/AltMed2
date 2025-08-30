@@ -7,7 +7,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import BottomNavigation from "@/components/bottom-navigation";
 
 interface ComparisonData {
   medication1: any;
@@ -83,7 +82,7 @@ export default function Comparison() {
           <Skeleton className="h-8 w-64 mb-6" />
           <Skeleton className="h-96 w-full" />
         </main>
-        <BottomNavigation currentPage="compare" />
+        
       </div>
     );
   }
@@ -102,7 +101,7 @@ export default function Comparison() {
         <main className="px-6 py-6">
           <p className="text-gray-600">Unable to load comparison data. Please try again.</p>
         </main>
-        <BottomNavigation currentPage="compare" />
+        
       </div>
     );
   }
@@ -196,7 +195,7 @@ export default function Comparison() {
         )}
       </main>
 
-      <BottomNavigation currentPage="compare" />
+      
     </div>
   );
 }

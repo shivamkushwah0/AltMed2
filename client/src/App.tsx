@@ -17,13 +17,10 @@ import NotFound from "@/pages/not-found";
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
 
-  // In development mode, always show the app as authenticated
-  const isDevelopment = import.meta.env.DEV || import.meta.env.NODE_ENV === 'development';
-  const showApp = isDevelopment || isAuthenticated;
-
+  const showApp = isAuthenticated;
   return (
     <Switch>
-      {isLoading && !isDevelopment ? (
+      {isLoading ? (
         <Route path="*">
           <div className="min-h-screen flex items-center justify-center">
             <div className="text-center">
@@ -37,13 +34,14 @@ function Router() {
       ) : (
         <>
           <Route path="/" component={Home} />
+          <Route path="/home" component={Home} />
           <Route path="/results" component={MedicationResults} />
           <Route path="/medication/:id" component={MedicationDetail} />
           <Route path="/compare" component={Comparison} />
           <Route path="/pharmacies" component={PharmacyFinder} />
           <Route path="/favorites" component={Favorites} />
           <Route path="/settings" component={Settings} />
-          <Route component={NotFound} />
+          {/* <Route path="/*" component={NotFound} /> */}
         </>
       )}
     </Switch>

@@ -1,9 +1,9 @@
-import { Search, Scale, Heart, Settings } from "lucide-react";
+import { Search, Heart, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLocation } from "wouter";
 
 interface BottomNavigationProps {
-  currentPage: "search" | "compare" | "favorites" | "settings";
+  currentPage: "search" | "favorites" | "settings";
 }
 
 export default function BottomNavigation({ currentPage }: BottomNavigationProps) {
@@ -15,12 +15,6 @@ export default function BottomNavigation({ currentPage }: BottomNavigationProps)
       label: "Search",
       icon: Search,
       path: "/",
-    },
-    {
-      id: "compare" as const,
-      label: "Compare", 
-      icon: Scale,
-      path: "/compare",
     },
     {
       id: "favorites" as const,

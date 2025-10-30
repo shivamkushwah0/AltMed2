@@ -64,9 +64,8 @@ Respond with JSON in this exact format:
       : '';
 
     const userPrompt = `Analyze these symptoms and recommend appropriate medications: ${symptoms.join(", ")}${symptomCountNote}`;
-
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-pro",
+      model: "gemini-2.0-flash-lite",
       config: {
         systemInstruction: systemPrompt,
         responseMimeType: "application/json",
